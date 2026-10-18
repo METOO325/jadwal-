@@ -57,6 +57,7 @@ h2.dayhead span{font-weight:400;color:var(--muted);font-size:.9rem}
 .lec .subj{font-weight:600;font-size:1rem;line-height:1.4}
 .lec .meta{color:var(--muted);font-size:.88rem;margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 12px}
 .lec .meta .room{color:var(--ink);font-weight:600}
+.lec .grp{font-size:.85rem;color:var(--brand);font-weight:600;margin-top:2px}
 .tag{display:inline-block;border-radius:6px;padding:0 8px;font-size:.78rem;font-weight:600;margin-inline-end:6px;vertical-align:2px}
 .tag.lang{background:var(--bg);color:var(--ink)}
 .tag.cancel{background:var(--cancel);color:#fff}
@@ -116,7 +117,6 @@ footer a{color:var(--brand)}
 <footer class="wrap" id="foot"></footer>
 
 <script>
-/* حط هنا رابط ومفتاح مشروع Supabase الجديد بتاع الجداول */
 const SUPABASE_URL      = 'https://yojdekykcumpslarkfaf.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_LsYAEhQ7GSQ8iODLKNmWKQ_agv5Vnv1';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth:{ persistSession:false } });
@@ -132,10 +132,13 @@ const hm = t => { const [h,m]=String(t).split(':').map(Number); return {h,m}; };
 const mins = t => { const {h,m}=hm(t); return h*60+m; };
 function clock(t){ const {h,m}=hm(t); const h12 = h%12 || 12; return { n: h12 + (m?':'+String(m).padStart(2,'0'):''), p: h<12?'ص':'م' }; }
 
-const slug = new URLSearchParams(location.search).get('s');
+const params = new URLSearchParams(location.search);
+const slug = params.get('s');
+const room = params.get('room');
+const normRoom = v => String(v||'').replace(/\s+/g,'').replace(/ة/g,'ه').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي');
 const LS_KEY = 'jadwal-lang-' + slug;
 const store = { get(k){ try{ return localStorage.getItem(k); }catch{ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch{} } };
-const state = { sched:null, items:[], changes:[], weekStart:null, day:null, lang: store.get(LS_KEY) || '' };
+const state = { roomMode:!!room, schedMap:new Map(), sched:null, items:[], changes:[], weekStart:null, day:null, lang: store.get(LS_KEY) || '' };
 
 function weekStartFor(d){
   const dow = d.getDay();
@@ -145,6 +148,7 @@ function weekStartFor(d){
 }
 
 async function boot(){
+  if(room) return bootRoom();
   if(!slug) return showAll();
   const { data:sched, error } = await sb.from('schedules').select('*').eq('slug', slug).maybeSingle();
   if(error || !sched){ $('#loading').textContent = 'الجدول ده مش موجود. اتأكد من الكود أو افتح قائمة كل الجداول.'; $('#foot').innerHTML='<a href="?">كل الجداول</a>'; return; }
@@ -163,12 +167,42 @@ async function boot(){
   setInterval(refresh, 120000);
   document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refresh(); });
 }
+async function bootRoom(){
+  document.title = `جدول ${room}`;
+  $('#term').textContent = 'العام الجامعي 2026/2027';
+  $('#title').textContent = room;
+  $('#track').textContent = 'كل المحاضرات اللي في المكان ده';
+  await loadRoomData();
+  state.weekStart = weekStartFor(new Date());
+  await loadChanges();
+  pickDefaultDay(); render();
+  $('#loading').classList.add('hidden'); $('#view').classList.remove('hidden');
+  setInterval(refresh, 120000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refresh(); });
+}
+async function loadRoomData(){
+  const [{data:scheds},{data:items}] = await Promise.all([
+    sb.from('schedules').select('*').order('sort'),
+    sb.from('schedule_items').select('*').order('start_time')]);
+  state.schedMap = new Map((scheds||[]).map(x=>[x.id,x]));
+  state.items = items || [];
+  const last = Math.max(0, ...(scheds||[]).map(x=>+new Date(x.updated_at)));
+  state.sched = { notice:null, updated_at: last ? new Date(last).toISOString() : new Date().toISOString() };
+}
 async function loadChanges(){
   const from = iso(state.weekStart), to = iso(addDays(state.weekStart,6));
-  const { data } = await sb.from('schedule_changes').select('*').eq('schedule_id', state.sched.id).gte('on_date',from).lte('on_date',to);
+  let q = sb.from('schedule_changes').select('*').gte('on_date',from).lte('on_date',to);
+  if(!state.roomMode) q = q.eq('schedule_id', state.sched.id);
+  const { data } = await q;
   state.changes = data || [];
 }
 async function refresh(){
+  if(state.roomMode){
+    await loadRoomData();
+    const ws = weekStartFor(new Date());
+    if(+ws !== +state.weekStart){ state.weekStart = ws; state.day = null; }
+    await loadChanges(); if(state.day==null) pickDefaultDay(); render(); return;
+  }
   const [{data:s},{data:items}] = await Promise.all([
     sb.from('schedules').select('*').eq('id', state.sched.id).single(),
     sb.from('schedule_items').select('*').eq('schedule_id', state.sched.id).order('start_time')]);
@@ -204,7 +238,20 @@ function lecturesFor(day){
       start_time:c.start_time||i.start_time, end_time:c.end_time||i.end_time };
   });
   ch.filter(c=>!c.item_id).forEach(c=>rows.push({ id:'x'+c.id, kind:'extra', change:c, subject:c.subject, lecturer:c.lecturer, room:c.room,
-    start_time:c.start_time, end_time:c.end_time, lang:null }));
+    start_time:c.start_time, end_time:c.end_time, lang:null, schedule_id:c.schedule_id }));
+  if(state.roomMode){
+    const want = normRoom(room);
+    const merged = new Map();   // المحاضرة المشتركة بين كذا فرقة تظهر مرة واحدة
+    rows.filter(r=>normRoom((r.change && r.change.room) || r.room)===want).forEach(r=>{
+      const lect = (r.change && r.change.lecturer) || r.lecturer;
+      const key = [r.start_time, r.end_time, r.kind, normRoom(r.subject).replace(/[()]/g,''), normRoom(lect)].join('|');
+      const g = state.schedMap.get(r.schedule_id);
+      const label = g ? g.title + (g.track ? ' — ' + g.track : '') : '';
+      if(merged.has(key)) merged.get(key).groups.push(label);
+      else merged.set(key, { ...r, groups:[label] });
+    });
+    return [...merged.values()].sort((a,b)=>mins(a.start_time)-mins(b.start_time));
+  }
   return rows.filter(r=>!state.lang || !r.lang || r.lang===state.lang)
              .sort((a,b)=>mins(a.start_time)-mins(b.start_time));
 }
@@ -213,7 +260,7 @@ function render(){
   const s = state.sched;
   $('#notice').classList.toggle('hidden', !s.notice); $('#notice').textContent = s.notice || '';
 
-  const langs = [...new Set(state.items.map(i=>i.lang).filter(Boolean))];
+  const langs = state.roomMode ? [] : [...new Set(state.items.map(i=>i.lang).filter(Boolean))];
   $('#langs').classList.toggle('hidden', !langs.length);
   if(langs.length){
     if(state.lang && !langs.includes(state.lang)) state.lang='';
@@ -250,6 +297,7 @@ function render(){
       <div class="body">
         <div>${tags}</div>
         <div class="subj">${esc(r.subject)}</div>
+        ${state.roomMode && r.groups ? `<div class="grp">${r.groups.filter(Boolean).map(esc).join('<br>')}</div>` : ''}
         <div class="meta"><span>${lecturer}</span>${room}</div>
         ${timeChanged?`<div class="note">الميعاد اتغيّر النهارده</div>`:''}
         ${c.note?`<div class="note">${esc(c.note)}</div>`:''}
@@ -267,11 +315,18 @@ async function showAll(){
   document.title = 'جداول المحاضرات';
   $('#term').textContent = 'العام الجامعي 2026/2027';
   $('#title').textContent = 'جداول المحاضرات';
-  const { data } = await sb.from('schedules').select('slug,title,track,system,grp,sort').order('sort');
+  const [{ data }, { data:rooms }] = await Promise.all([
+    sb.from('schedules').select('slug,title,track,system,grp,sort').order('sort'),
+    sb.from('schedule_items').select('room')]);
+  const roomSet = new Map();
+  (rooms||[]).forEach(r=>{ if(r.room && !roomSet.has(normRoom(r.room))) roomSet.set(normRoom(r.room), r.room); });
+  const roomList = [...roomSet.values()].sort((a,b)=>a.localeCompare(b,'ar',{numeric:true}));
   const groups = {};
   (data||[]).forEach(s=>{ (groups[s.grp||'أخرى'] ||= []).push(s); });
   $('#all').innerHTML = Object.entries(groups).map(([g,list])=>`<div class="group"><h3>${esc(g)}</h3>${list.map(s=>
     `<a class="slink" href="?s=${encodeURIComponent(s.slug)}"><b>${esc(s.title)}</b><span>${esc(s.track||'عام')}</span></a>`).join('')}</div>`).join('')
+    + (roomList.length ? `<div class="group"><h3>المدرجات والقاعات</h3>${roomList.map(r=>
+      `<a class="slink" href="?room=${encodeURIComponent(r)}"><b>${esc(r)}</b><span>محاضرات المكان ده النهارده</span></a>`).join('')}</div>` : '')
     || '<div class="empty">مفيش جداول لسه.</div>';
   $('#loading').classList.add('hidden'); $('#all').classList.remove('hidden');
 }

@@ -127,7 +127,8 @@ dialog::backdrop{background:rgba(20,35,40,.45)}
       <select id="sched" aria-label="اختار الجدول"></select>
       <button class="btn ghost" id="openPublic">صفحة الطلبة</button>
       <button class="btn ghost" id="qrBtn">QR الجدول ده</button>
-      <button class="btn ghost" id="qrAllBtn">طباعة كل الـ QR</button>
+      <button class="btn ghost" id="qrAllBtn">طباعة QR الفرق</button>
+      <button class="btn ghost" id="qrRoomsBtn">طباعة QR المدرجات</button>
       <button class="btn" id="addItemBtn">+ محاضرة ثابتة</button>
     </div>
     <div class="weeknav">
@@ -214,6 +215,8 @@ const t5 = t => t ? String(t).slice(0,5) : '';
 const mins = t => { const [h,m]=String(t).split(':').map(Number); return h*60+m; };
 const clock = t => { if(!t) return ''; const [h,m]=String(t).split(':').map(Number); return (h%12||12)+(m?':'+String(m).padStart(2,'0'):'')+(h<12?' ص':' م'); };
 const fmt = new Intl.DateTimeFormat('ar-EG-u-nu-latn',{day:'numeric',month:'long'});
+const roomUrl = r => new URL('./?room='+encodeURIComponent(r), location.href).href;
+const normRoom = v => String(v||'').replace(/\s+/g,'').replace(/ة/g,'ه').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي');
 const publicUrl = slug => new URL('./?s='+encodeURIComponent(slug), location.href).href;
 function toast(m){ const t=document.createElement('div'); t.className='toast'; t.textContent=m; document.body.append(t); setTimeout(()=>t.remove(),2600); }
 function weekStartFor(d){ const dow=d.getDay(); let ws=addDays(d,-((dow+1)%7)); if(dow===5) ws=addDays(ws,7); ws.setHours(0,0,0,0); return ws; }
@@ -403,14 +406,22 @@ $('#qrBtn').addEventListener('click', ()=>{
   qrInto($('#qrOne'), url, 220); $('#qrDlg').showModal();
 });
 $('#copyLink').addEventListener('click', async ()=>{ try{ await navigator.clipboard.writeText(publicUrl(state.sched.slug)); toast('اتنسخ اللينك'); }catch{ toast(publicUrl(state.sched.slug)); } });
-function printCards(list, one){
+function printCards(list, one, kind){
   const pa = $('#printArea'); pa.className = one?'one':'';
-  pa.innerHTML = list.map((s,i)=>`<div class="qcard"><h2>جدول المحاضرات</h2><p><b>${esc(s.title)}</b>${s.track?'<br>'+esc(s.track):''}</p><div class="qr" id="pq${i}"></div><small>صوّر الكود بكاميرا الموبايل عشان تشوف جدول النهارده وأي إلغاء أو تعديل</small></div>`).join('');
-  list.forEach((s,i)=>qrInto($('#pq'+i), publicUrl(s.slug), one?300:190));
+  const isRoom = kind==='room';
+  pa.innerHTML = list.map((s,i)=>`<div class="qcard"><h2>${isRoom?'جدول المكان ده':'جدول المحاضرات'}</h2><p><b style="font-size:${isRoom?'26px':'inherit'}">${esc(isRoom?s:s.title)}</b>${!isRoom&&s.track?'<br>'+esc(s.track):''}</p><div class="qr" id="pq${i}"></div><small>صوّر الكود بكاميرا الموبايل عشان تشوف ${isRoom?'المحاضرات اللي هنا النهارده':'جدول النهارده'} وأي إلغاء أو تعديل</small></div>`).join('');
+  list.forEach((s,i)=>qrInto($('#pq'+i), isRoom ? roomUrl(s) : publicUrl(s.slug), one?300:190));
   setTimeout(()=>window.print(), 400);
 }
 $('#printOne').addEventListener('click', ()=>printCards([state.sched], true));
 $('#qrAllBtn').addEventListener('click', ()=>printCards(state.scheds, false));
+$('#qrRoomsBtn').addEventListener('click', async ()=>{
+  const { data } = await sb.from('schedule_items').select('room');
+  const m = new Map(); (data||[]).forEach(r=>{ if(r.room && !m.has(normRoom(r.room))) m.set(normRoom(r.room), r.room); });
+  const rooms = [...m.values()].sort((a,b)=>a.localeCompare(b,'ar',{numeric:true}));
+  if(!rooms.length) return toast('مفيش قاعات متسجلة في الجداول');
+  printCards(rooms, false, 'room');
+});
 
 boot();
 </script>
