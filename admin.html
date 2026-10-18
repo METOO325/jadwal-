@@ -234,7 +234,7 @@ $('#loginForm').addEventListener('submit', async e=>{
 });
 $('#logoutBtn').addEventListener('click', async ()=>{ await sb.auth.signOut(); location.reload(); });
 async function enter(user){
-  state.profile = user; $('#meName').textContent = user.email;
+  state.profile = user; const md = user.user_metadata || {}; $('#meName').textContent = md.display_name || md.full_name || user.email;
   $('#loginView').classList.add('hidden'); $('#appView').classList.remove('hidden');
   $('#itDay').innerHTML = WEEK_ORDER.map(d=>`<option value="${d}">${DAY_NAMES[d]}</option>`).join('');
   const { data } = await sb.from('schedules').select('*').order('sort');
