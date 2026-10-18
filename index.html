@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#155E57">
+<title>جدول المحاضرات</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+:root{
+  --bg:#EEF2F1; --surface:#FFFFFF; --ink:#1C2B33; --muted:#5E6F77; --line:#D3DCDA;
+  --brand:#155E57; --brand-2:#0F4842; --brand-soft:#DCEBE8;
+  --cancel:#B03A2E; --cancel-bg:#F8E1DE; --change:#A86A00; --change-bg:#FBEFD6; --extra:#227A4B; --extra-bg:#E1F2E8;
+  --r:12px;
+  font-family:"IBM Plex Sans Arabic","Segoe UI",Tahoma,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);line-height:1.55;-webkit-text-size-adjust:100%}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px}
+.hidden{display:none!important}
+
+header.top{background:var(--brand);color:#fff;padding:18px 0 22px}
+header.top .term{font-size:.85rem;opacity:.8}
+header.top h1{margin:2px 0 0;font-size:1.5rem;font-weight:700;line-height:1.3}
+header.top .track{font-size:1.05rem;font-weight:500;opacity:.92}
+
+.notice{background:var(--change-bg);color:#5c3b00;border-radius:var(--r);padding:12px 14px;margin-top:14px;white-space:pre-line;font-weight:500}
+
+.langs{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:14px;font-size:.9rem;color:var(--muted)}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:99px;padding:4px 12px;cursor:pointer;font-size:.88rem}
+.chip[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+.days{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;gap:6px;margin:16px 0 6px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:5}
+.day{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 2px;cursor:pointer;text-align:center;line-height:1.25}
+.day b{display:block;font-size:.95rem}
+.day small{color:var(--muted);font-size:.78rem}
+.day[aria-pressed="true"]{background:var(--brand);border-color:var(--brand);color:#fff}
+.day[aria-pressed="true"] small{color:#d9ece8}
+.day.today{box-shadow:inset 0 -3px 0 var(--change)}
+.day .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--cancel);vertical-align:middle;margin-inline-start:3px}
+
+h2.dayhead{font-size:1.1rem;margin:12px 0 10px;display:flex;align-items:baseline;gap:8px}
+h2.dayhead span{font-weight:400;color:var(--muted);font-size:.9rem}
+
+.list{display:flex;flex-direction:column;gap:10px;padding-bottom:28px}
+.lec{display:grid;grid-template-columns:76px 1fr;background:var(--surface);border-radius:var(--r);overflow:hidden;border:1px solid var(--line)}
+.lec .time{background:var(--brand-soft);color:var(--brand-2);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:10px 4px;font-variant-numeric:tabular-nums;text-align:center}
+.lec .time b{font-size:1.15rem;line-height:1.1}
+.lec .time i{font-style:normal;font-size:.72rem;opacity:.75}
+.lec .time .to{font-size:.85rem;margin-top:4px;opacity:.85}
+.lec .body{padding:10px 12px;min-width:0}
+.lec .subj{font-weight:600;font-size:1rem;line-height:1.4}
+.lec .meta{color:var(--muted);font-size:.88rem;margin-top:4px;display:flex;flex-wrap:wrap;gap:4px 12px}
+.lec .meta .room{color:var(--ink);font-weight:600}
+.tag{display:inline-block;border-radius:6px;padding:0 8px;font-size:.78rem;font-weight:600;margin-inline-end:6px;vertical-align:2px}
+.tag.lang{background:var(--bg);color:var(--ink)}
+.tag.cancel{background:var(--cancel);color:#fff}
+.tag.change{background:var(--change);color:#fff}
+.tag.extra{background:var(--extra);color:#fff}
+.tag.now{background:var(--brand);color:#fff}
+.was{text-decoration:line-through;opacity:.7}
+.note{margin-top:6px;font-size:.88rem;border-radius:6px;padding:4px 8px}
+
+.lec.cancelled{border-color:var(--cancel)}
+.lec.cancelled .time{background:var(--cancel-bg);color:var(--cancel)}
+.lec.cancelled .subj{text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:var(--cancel)}
+.lec.cancelled .note{background:var(--cancel-bg);color:var(--cancel)}
+.lec.changed{border-color:var(--change)}
+.lec.changed .time{background:var(--change-bg);color:#6b4500}
+.lec.changed .note{background:var(--change-bg);color:#6b4500}
+.lec.extra{border-color:var(--extra)}
+.lec.extra .time{background:var(--extra-bg);color:var(--extra)}
+.lec.extra .note{background:var(--extra-bg);color:var(--extra)}
+.lec.now{border:2px solid var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.lec.past{opacity:.55}
+
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r);padding:28px 16px;text-align:center;color:var(--muted)}
+footer{color:var(--muted);font-size:.8rem;text-align:center;padding:4px 0 32px}
+footer a{color:var(--brand)}
+
+/* قائمة كل الجداول */
+.group{margin-top:20px}
+.group h3{font-size:.95rem;color:var(--muted);margin:0 0 8px;font-weight:600}
+.slink{display:block;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:8px;color:var(--ink);text-decoration:none}
+.slink b{display:block}
+.slink span{color:var(--muted);font-size:.88rem}
+.loading{padding:60px 0;text-align:center;color:var(--muted)}
+@media (max-width:380px){.lec{grid-template-columns:64px 1fr}.day b{font-size:.85rem}}
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap">
+  <div class="term" id="term"></div>
+  <h1 id="title">جدول المحاضرات</h1>
+  <div class="track" id="track"></div>
+</div></header>
+
+<main class="wrap">
+  <div id="loading" class="loading">بيحمّل الجدول…</div>
+
+  <section id="view" class="hidden">
+    <div class="notice hidden" id="notice"></div>
+    <div class="langs hidden" id="langs"></div>
+    <nav class="days" id="days" aria-label="أيام الأسبوع"></nav>
+    <h2 class="dayhead" id="dayhead"></h2>
+    <div class="list" id="list"></div>
+  </section>
+
+  <section id="all" class="hidden"></section>
+</main>
+<footer class="wrap" id="foot"></footer>
+
+<script>
+/* حط هنا رابط ومفتاح مشروع Supabase الجديد بتاع الجداول */
+const SUPABASE_URL      = 'https://yojdekykcumpslarkfaf.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_LsYAEhQ7GSQ8iODLKNmWKQ_agv5Vnv1';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth:{ persistSession:false } });
+
+const $ = s => document.querySelector(s);
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const DAY_NAMES = ['الأحد','الاثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const WEEK_ORDER = [6,0,1,2,3,4,5];               // الأسبوع بيبدأ السبت
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const addDays = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+const monthFmt = new Intl.DateTimeFormat('ar-EG-u-nu-latn',{day:'numeric',month:'long'});
+const hm = t => { const [h,m]=String(t).split(':').map(Number); return {h,m}; };
+const mins = t => { const {h,m}=hm(t); return h*60+m; };
+function clock(t){ const {h,m}=hm(t); const h12 = h%12 || 12; return { n: h12 + (m?':'+String(m).padStart(2,'0'):''), p: h<12?'ص':'م' }; }
+
+const slug = new URLSearchParams(location.search).get('s');
+const LS_KEY = 'jadwal-lang-' + slug;
+const store = { get(k){ try{ return localStorage.getItem(k); }catch{ return null; } }, set(k,v){ try{ localStorage.setItem(k,v); }catch{} } };
+const state = { sched:null, items:[], changes:[], weekStart:null, day:null, lang: store.get(LS_KEY) || '' };
+
+function weekStartFor(d){
+  const dow = d.getDay();
+  let ws = addDays(d, -((dow+1)%7));             // آخر سبت
+  if(dow===5) ws = addDays(ws, 7);               // يوم الجمعة نعرض الأسبوع الجاي
+  ws.setHours(0,0,0,0); return ws;
+}
+
+async function boot(){
+  if(!slug) return showAll();
+  const { data:sched, error } = await sb.from('schedules').select('*').eq('slug', slug).maybeSingle();
+  if(error || !sched){ $('#loading').textContent = 'الجدول ده مش موجود. اتأكد من الكود أو افتح قائمة كل الجداول.'; $('#foot').innerHTML='<a href="?">كل الجداول</a>'; return; }
+  state.sched = sched;
+  document.title = `جدول ${sched.title}${sched.track?' — '+sched.track:''}`;
+  $('#term').textContent = [sched.term, sched.system, 'العام الجامعي 2026/2027'].filter(Boolean).join('  ·  ');
+  $('#title').textContent = sched.title;
+  $('#track').textContent = sched.track || '';
+  const { data:items } = await sb.from('schedule_items').select('*').eq('schedule_id', sched.id).order('start_time');
+  state.items = items || [];
+  state.weekStart = weekStartFor(new Date());
+  await loadChanges();
+  pickDefaultDay();
+  render();
+  $('#loading').classList.add('hidden'); $('#view').classList.remove('hidden');
+  setInterval(refresh, 120000);
+  document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refresh(); });
+}
+async function loadChanges(){
+  const from = iso(state.weekStart), to = iso(addDays(state.weekStart,6));
+  const { data } = await sb.from('schedule_changes').select('*').eq('schedule_id', state.sched.id).gte('on_date',from).lte('on_date',to);
+  state.changes = data || [];
+}
+async function refresh(){
+  const [{data:s},{data:items}] = await Promise.all([
+    sb.from('schedules').select('*').eq('id', state.sched.id).single(),
+    sb.from('schedule_items').select('*').eq('schedule_id', state.sched.id).order('start_time')]);
+  if(s) state.sched = s; if(items) state.items = items;
+  const ws = weekStartFor(new Date());
+  if(+ws !== +state.weekStart){ state.weekStart = ws; state.day = null; }
+  await loadChanges(); if(state.day==null) pickDefaultDay(); render();
+}
+
+function schoolDays(){
+  const set = new Set(state.items.map(i=>i.day));
+  state.changes.forEach(c=>{ if(!c.item_id) set.add(new Date(c.on_date+'T12:00').getDay()); });
+  [0,1,2,3,4].forEach(d=>set.add(d));
+  return WEEK_ORDER.filter(d=>set.has(d));
+}
+function dateOf(day){ return addDays(state.weekStart, WEEK_ORDER.indexOf(day)); }
+function pickDefaultDay(){
+  const days = schoolDays(), todayIso = iso(new Date());
+  const today = days.find(d=>iso(dateOf(d))===todayIso);
+  if(today!=null && lecturesFor(today).length){ state.day = today; return; }
+  const upcoming = days.find(d=>iso(dateOf(d))>=todayIso && lecturesFor(d).length);
+  state.day = upcoming ?? today ?? days[0];
+}
+
+function lecturesFor(day){
+  const dIso = iso(dateOf(day));
+  const ch = state.changes.filter(c=>c.on_date===dIso);
+  const byItem = new Map(ch.filter(c=>c.item_id).map(c=>[c.item_id,c]));
+  const rows = state.items.filter(i=>i.day===day).map(i=>{
+    const c = byItem.get(i.id);
+    if(!c) return { ...i, kind:'normal' };
+    return { ...i, kind: c.cancelled?'cancelled':'changed', change:c,
+      start_time:c.start_time||i.start_time, end_time:c.end_time||i.end_time };
+  });
+  ch.filter(c=>!c.item_id).forEach(c=>rows.push({ id:'x'+c.id, kind:'extra', change:c, subject:c.subject, lecturer:c.lecturer, room:c.room,
+    start_time:c.start_time, end_time:c.end_time, lang:null }));
+  return rows.filter(r=>!state.lang || !r.lang || r.lang===state.lang)
+             .sort((a,b)=>mins(a.start_time)-mins(b.start_time));
+}
+
+function render(){
+  const s = state.sched;
+  $('#notice').classList.toggle('hidden', !s.notice); $('#notice').textContent = s.notice || '';
+
+  const langs = [...new Set(state.items.map(i=>i.lang).filter(Boolean))];
+  $('#langs').classList.toggle('hidden', !langs.length);
+  if(langs.length){
+    if(state.lang && !langs.includes(state.lang)) state.lang='';
+    $('#langs').innerHTML = '<span>لغتك التانية:</span>' + ['',...langs].map(l=>`<button class="chip" data-lang="${esc(l)}" aria-pressed="${state.lang===l}">${l?esc(l):'الكل'}</button>`).join('');
+  }
+
+  const todayIso = iso(new Date());
+  $('#days').innerHTML = schoolDays().map(d=>{
+    const dt = dateOf(d), cancelled = state.changes.some(c=>c.on_date===iso(dt));
+    return `<button class="day ${iso(dt)===todayIso?'today':''}" data-day="${d}" aria-pressed="${d===state.day}">
+      <b>${DAY_NAMES[d]}${cancelled?'<span class="dot" title="فيه تعديل"></span>':''}</b><small>${dt.getDate()}/${dt.getMonth()+1}</small></button>`;
+  }).join('');
+
+  const dt = dateOf(state.day), isToday = iso(dt)===todayIso;
+  $('#dayhead').innerHTML = `${isToday?'النهارده':DAY_NAMES[state.day]} <span>${isToday?DAY_NAMES[state.day]+' ':''}${monthFmt.format(dt)}</span>`;
+
+  const now = new Date(), nowMin = now.getHours()*60+now.getMinutes();
+  const rows = lecturesFor(state.day);
+  $('#list').innerHTML = rows.length ? rows.map(r=>{
+    const a = clock(r.start_time), b = clock(r.end_time);
+    const live = isToday && r.kind!=='cancelled' && nowMin>=mins(r.start_time) && nowMin<mins(r.end_time);
+    const past = isToday && nowMin>=mins(r.end_time);
+    const c = r.change || {};
+    const lecturer = r.kind==='changed' && c.lecturer ? `<span>${esc(c.lecturer)}</span> <span class="was">${esc(r.lecturer)}</span>` : esc(r.lecturer||'');
+    const room = r.kind==='changed' && c.room ? `<span class="room">${esc(c.room)}</span> <span class="was">${esc(r.room)}</span>` : `<span class="room">${esc(r.room||'')}</span>`;
+    const tags = (live?'<span class="tag now">دلوقتي</span>':'') +
+      (r.kind==='cancelled'?'<span class="tag cancel">ملغاة</span>':'') +
+      (r.kind==='changed'?'<span class="tag change">تعديل</span>':'') +
+      (r.kind==='extra'?'<span class="tag extra">محاضرة تعويضية</span>':'') +
+      (r.lang?`<span class="tag lang">${esc(r.lang)}</span>`:'');
+    const timeChanged = r.kind==='changed' && (c.start_time||c.end_time);
+    return `<article class="lec ${r.kind} ${live?'now':''} ${past&&!live?'past':''}">
+      <div class="time"><b>${a.n}</b><i>${a.p}</i><span class="to">إلى ${b.n} ${b.p}</span></div>
+      <div class="body">
+        <div>${tags}</div>
+        <div class="subj">${esc(r.subject)}</div>
+        <div class="meta"><span>${lecturer}</span>${room}</div>
+        ${timeChanged?`<div class="note">الميعاد اتغيّر النهارده</div>`:''}
+        ${c.note?`<div class="note">${esc(c.note)}</div>`:''}
+      </div></article>`;
+  }).join('') : `<div class="empty">مفيش محاضرات ${isToday?'النهارده':'في اليوم ده'}.</div>`;
+
+  const upd = new Date(s.updated_at);
+  $('#foot').innerHTML = `آخر تعديل للجدول: ${upd.toLocaleString('ar-EG-u-nu-latn',{day:'numeric',month:'long',hour:'numeric',minute:'2-digit'})} · <a href="?">كل الجداول</a>`;
+}
+
+$('#days').addEventListener('click', e=>{ const b=e.target.closest('.day'); if(!b) return; state.day=+b.dataset.day; render(); });
+$('#langs').addEventListener('click', e=>{ const b=e.target.closest('.chip'); if(!b) return; state.lang=b.dataset.lang; store.set(LS_KEY,state.lang); render(); });
+
+async function showAll(){
+  document.title = 'جداول المحاضرات';
+  $('#term').textContent = 'العام الجامعي 2026/2027';
+  $('#title').textContent = 'جداول المحاضرات';
+  const { data } = await sb.from('schedules').select('slug,title,track,system,grp,sort').order('sort');
+  const groups = {};
+  (data||[]).forEach(s=>{ (groups[s.grp||'أخرى'] ||= []).push(s); });
+  $('#all').innerHTML = Object.entries(groups).map(([g,list])=>`<div class="group"><h3>${esc(g)}</h3>${list.map(s=>
+    `<a class="slink" href="?s=${encodeURIComponent(s.slug)}"><b>${esc(s.title)}</b><span>${esc(s.track||'عام')}</span></a>`).join('')}</div>`).join('')
+    || '<div class="empty">مفيش جداول لسه.</div>';
+  $('#loading').classList.add('hidden'); $('#all').classList.remove('hidden');
+}
+boot();
+</script>
+</body>
+</html>
